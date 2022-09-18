@@ -45,6 +45,18 @@ public class PlayResultController : BaseController<PlayResultController>
             Result = 1
         };
 
+        // Fix issue caused by guest play, god knows why they send guest play data
+        if (request.BaidConf == 0)
+        {
+            return Ok(response);
+        }
+
+        if (await userDatumService.GetFirstUserDatumOrNull(request.BaidConf) is null)
+        {
+            Logger.LogWarning("Game uploading a non exisiting user with baid {Baid}", request.BaidConf);
+            return Ok(response);
+        }
+
         var lastPlayDatetime = DateTime.ParseExact(playResultData.PlayDatetime, Constants.DATE_TIME_FORMAT,
             CultureInfo.InvariantCulture);
 
@@ -168,8 +180,10 @@ public class PlayResultController : BaseController<PlayResultController>
     {
         var userdata = await userDatumService.GetFirstUserDatumOrNull(request.BaidConf);
 
-        userdata.ThrowIfNull();
+        userdata.ThrowIfNull($"User data is null! Baid: {request.BaidConf}");
 
+        var playMode = (PlayMode)playResultData.PlayMode;
+        
         userdata.Title = playResultData.Title;
         userdata.TitlePlateId = playResultData.TitleplateId;
         var costumeData = new List<uint>
@@ -182,12 +196,16 @@ public class PlayResultController : BaseController<PlayResultController>
         };
         userdata.CostumeData = JsonSerializer.Serialize(costumeData);
 
-        var lastStage = playResultData.AryStageInfoes.Last();
-        var option = BinaryPrimitives.ReadInt16LittleEndian(lastStage.OptionFlg);
-        userdata.OptionSetting = option;
-        userdata.IsSkipOn = lastStage.IsSkipOn;
-        userdata.IsVoiceOn = lastStage.IsVoiceOn;
-        userdata.NotesPosition = lastStage.NotesPosition;
+        // Skip user setting saving when in dan mode as dan mode uses its own default setting
+        if (playMode != PlayMode.DanMode)
+        {
+            var lastStage = playResultData.AryStageInfoes.Last();
+            var option = BinaryPrimitives.ReadInt16LittleEndian(lastStage.OptionFlg);
+            userdata.OptionSetting = option;
+            userdata.IsSkipOn = lastStage.IsSkipOn;
+            userdata.IsVoiceOn = lastStage.IsVoiceOn;
+            userdata.NotesPosition = lastStage.NotesPosition;
+        }
 
         userdata.LastPlayDatetime = lastPlayDatetime;
         userdata.LastPlayMode = playResultData.PlayMode;
