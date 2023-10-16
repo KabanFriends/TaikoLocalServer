@@ -1,11 +1,16 @@
 using System.Reflection;
 using System.Security.Authentication;
+using Serilog.Sinks.File.Header;
+using TaikoLocalServer.Logging;
+using GameDatabase.Context;
+using Microsoft.AspNetCore.HttpLogging;
 using Microsoft.AspNetCore.HttpOverrides;
 using TaikoLocalServer.Middlewares;
 using TaikoLocalServer.Services.Extentions;
 using TaikoLocalServer.Settings;
 using Throw;
 using Serilog;
+using SharedProject.Utils;
 
 Log.Logger = new LoggerConfiguration()
     .WriteTo.Console()
@@ -20,29 +25,45 @@ Log.Information("Server starting up...");
 try
 {
     var builder = WebApplication.CreateBuilder(args);
-    // Manually enable tls 1.0
-    builder.WebHost.UseKestrel(kestrelOptions =>
+    
+    builder.Services.AddHttpLogging(options =>
     {
-        kestrelOptions.ConfigureHttpsDefaults(options => 
-            options.SslProtocols = SslProtocols.Tls | SslProtocols.Tls11 | SslProtocols.Tls12 | SslProtocols.Tls13);
+        options.LoggingFields = HttpLoggingFields.All;
+        options.RequestBodyLogLimit = 32768;
+        options.ResponseBodyLogLimit = 32768;
     });
+    
+    const string configurationsDirectory = "Configurations";
+    builder.Configuration.AddJsonFile($"{configurationsDirectory}/Kestrel.json", optional: true, reloadOnChange: false);
+    builder.Configuration.AddJsonFile($"{configurationsDirectory}/Logging.json", optional: false, reloadOnChange: false);
+    builder.Configuration.AddJsonFile($"{configurationsDirectory}/Database.json", optional: false, reloadOnChange: false);
+    builder.Configuration.AddJsonFile($"{configurationsDirectory}/ServerSettings.json", optional: false, reloadOnChange: false);
+    builder.Configuration.AddJsonFile($"{configurationsDirectory}/DataSettings.json", optional: true, reloadOnChange: false);
 
     builder.Host.UseSerilog((context, configuration) =>
     {
-        configuration.WriteTo.Console().ReadFrom.Configuration(context.Configuration);
+        configuration
+            .WriteTo.Console().ReadFrom.Configuration(context.Configuration)
+            .WriteTo.Logger(x =>
+            {
+                x.WriteTo.File(new CsvFormatter(),
+                    path: "./Logs/HeadClerkLog-.csv",
+                    hooks: new HeaderWriter("Date,ChassisId,ShopId,Baid,PlayedAt,IsRight,Type,Amount"),
+                    rollingInterval: RollingInterval.Day);
+                x.Filter.ByIncludingOnly("StartsWith(@m, 'CSV WRITE:')");
+            });
     });
 
     if (builder.Configuration.GetValue<bool>("ServerSettings:EnableMoreSongs"))
     {
-        Log.Warning("Song limit expanded! Currently the game has issue loading crown/score rank and " +
-                    "probably more server related data for songs with id > 1599. " +
-                    "Also, the game can have random crashes because of that! Use at your own risk!");
+        Log.Warning("Song limit expanded! Use at your own risk!");
     }
 
     // Add services to the container.
     builder.Services.AddOptions();
     builder.Services.AddSingleton<IGameDataService, GameDataService>();
     builder.Services.Configure<ServerSettings>(builder.Configuration.GetSection(nameof(ServerSettings)));
+    builder.Services.Configure<DataSettings>(builder.Configuration.GetSection(nameof(DataSettings)));
     builder.Services.AddControllers().AddProtoBufNet();
     builder.Services.AddDbContext<TaikoDbContext>(option =>
     {
@@ -105,6 +126,16 @@ try
 
 
     app.UseHttpLogging();
+    app.Use(async (context, next) =>
+    {
+        await next();
+    
+        if (context.Response.StatusCode >= 400)
+        {
+            Log.Error("Unknown request from: {RemoteIpAddress} {Method} {Path} {StatusCode}",
+                context.Connection.RemoteIpAddress, context.Request.Method, context.Request.Path, context.Response.StatusCode);
+        }
+    });
     app.MapControllers();
     app.MapFallbackToFile("index.html");
 

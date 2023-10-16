@@ -1,9 +1,15 @@
 ﻿namespace TaikoLocalServer.Controllers.Game;
 
-[Route("/v12r03/chassis/getfolder.php")]
+[Route("/v12r00_cn/chassis/getfolder.php")]
 [ApiController]
 public class GetFolderController : BaseController<GetFolderController>
 {
+    private readonly IGameDataService gameDataService;
+    public GetFolderController(IGameDataService gameDataService)
+    {
+        this.gameDataService = gameDataService;
+    }
+
     [HttpPost]
     [Produces("application/protobuf")]
     public IActionResult GetFolder([FromBody] GetfolderRequest request)
@@ -17,13 +23,14 @@ public class GetFolderController : BaseController<GetFolderController>
 
         foreach (var folderId in request.FolderIds)
         {
-            response.AryEventfolderDatas.Add(new GetfolderResponse.EventfolderData
+            gameDataService.GetFolderDictionary().TryGetValue(folderId, out var folderData);
+            if (folderData is null)
             {
-                FolderId = folderId,
-                Priority = 1,
-                SongNoes = new uint[] {1,2},
-                VerupNo = 1
-            });
+                Logger.LogWarning("Requested folder id {Id} does not exist!", folderId);
+                continue;
+            }
+
+            response.AryEventfolderDatas.Add(folderData);
         }
 
         return Ok(response);

@@ -1,5 +1,4 @@
-﻿using System.Collections.Immutable;
-using SharedProject.Models.Responses;
+﻿using SharedProject.Models.Responses;
 
 namespace TaikoLocalServer.Controllers.Api;
 
@@ -22,7 +21,7 @@ public class PlayDataController : BaseController<PlayDataController>
     }
 
     [HttpGet("{baid}")]
-    public async Task<ActionResult<SongBestResponse>> GetSongBestRecords(uint baid)
+    public async Task<ActionResult<SongBestResponse>> GetSongBestRecords(ulong baid)
     {
         var user = await userDatumService.GetFirstUserDatumOrNull(baid);
         if (user is null)

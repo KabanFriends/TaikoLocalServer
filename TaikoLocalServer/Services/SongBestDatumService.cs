@@ -1,4 +1,6 @@
-﻿using SharedProject.Models;
+﻿using GameDatabase.Context;
+using GameDatabase.Entities;
+using SharedProject.Models;
 using Swan.Mapping;
 using Throw;
 
@@ -13,7 +15,7 @@ public class SongBestDatumService : ISongBestDatumService
         this.context = context;
     }
 
-    public async Task<List<SongBestDatum>> GetAllSongBestData(uint baid)
+    public async Task<List<SongBestDatum>> GetAllSongBestData(ulong baid)
     {
         return await context.SongBestData.Where(datum => datum.Baid == baid).ToListAsync();
     }
@@ -35,7 +37,7 @@ public class SongBestDatumService : ISongBestDatumService
         await context.SaveChangesAsync();
     }
 
-    public async Task<List<SongBestData>> GetAllSongBestAsModel(uint baid)
+    public async Task<List<SongBestData>> GetAllSongBestAsModel(ulong baid)
     {
         var songbestDbData = await context.SongBestData.Where(datum => datum.Baid == baid)
             .ToListAsync();

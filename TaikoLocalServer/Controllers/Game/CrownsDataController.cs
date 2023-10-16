@@ -1,10 +1,9 @@
-﻿using System.Runtime.InteropServices;
-using Microsoft.Extensions.Options;
+﻿using Microsoft.Extensions.Options;
 using TaikoLocalServer.Settings;
 
 namespace TaikoLocalServer.Controllers.Game;
 
-[Route("/v12r03/chassis/crownsdata.php")]
+[Route("/v12r00_cn/chassis/crownsdata.php")]
 [ApiController]
 public class CrownsDataController : BaseController<CrownsDataController>
 {
